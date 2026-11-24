@@ -16,79 +16,92 @@ MODEL_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "effb0_fp1
 MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32).reshape(3, 1, 1)
 STD = np.array([0.229, 0.224, 0.225], dtype=np.float32).reshape(3, 1, 1)
 
-INK, SLATE, TEAL = "#0F1B2D", "#55657A", "#0E7C86"
-HIGH, MOD, LOW = "#B3361B", "#B7791F", "#7C97A6"
+NAVY, DEEP, MID, SKY = "#0B2447", "#19376D", "#2F63A8", "#8DB4E0"
+
+SENSITIVITY = {
+    "Strict": (0.50, "Flags only findings the model is most confident about. Fewer flags, but subtler findings can be missed."),
+    "Balanced": (0.30, "A middle ground between missing findings and flagging too many."),
+    "Sensitive": (0.15, "Flags anything the model responds to, even weakly. More flags, with more false alarms."),
+}
 
 st.set_page_config(page_title="Chest X-ray CPU Classifier", page_icon="🫁", layout="wide")
 
 CSS = """
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
-html, body, [class*="css"], .stApp { font-family: 'IBM Plex Sans', sans-serif; color: #0F1B2D; }
-.stApp { background: #F6F8FA; }
+.stApp, .stApp *:not([data-testid="stIconMaterial"]):not([class*="material"]) {
+  font-family: 'Times New Roman', Times, serif !important;
+}
+.stApp { background: #E6EEF8; color: #0B2447; }
 #MainMenu, footer, [data-testid="stToolbar"] { visibility: hidden; }
-.block-container { max-width: 1120px; padding-top: 2.2rem; padding-bottom: 3rem; }
+header[data-testid="stHeader"] { background: transparent; }
+.block-container { max-width: 1120px; padding-top: 1.6rem; padding-bottom: 3rem; }
 
-.hero h1 { font-family: 'Source Serif 4', serif; font-weight: 600; font-size: 2.6rem;
-  line-height: 1.15; letter-spacing: -0.01em; margin: 0 0 .6rem 0; color: #0F1B2D; }
-.hero p { font-size: 1.08rem; color: #55657A; max-width: 640px; line-height: 1.6; margin: 0 0 1.4rem 0; }
+.mast { background: #0B2447; color: #fff; padding: 44px 48px 0 48px; border-radius: 2px; margin-bottom: 26px; }
+.mast h1 { font-size: 3rem; font-weight: 700; line-height: 1.1; margin: 0 0 18px 0; color: #fff; letter-spacing: -0.5px; }
+.mast p { font-size: 1.22rem; line-height: 1.65; color: #CFE0F5; max-width: 780px; margin: 0 0 34px 0; }
+.facts { display: flex; border-top: 1px solid #2F4F82; margin: 0 -48px; }
+.fact { flex: 1; padding: 18px 48px; border-right: 1px solid #2F4F82; }
+.fact:last-child { border-right: none; }
+.fact .v { font-size: 1.2rem; font-weight: 700; color: #fff; }
+.fact .k { font-size: .95rem; color: #9DB9DD; margin-top: 2px; }
 
-.stats { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 1.6rem; }
-.stat { background: #fff; border: 1px solid #DDE3EA; border-radius: 10px; padding: 14px 18px; min-width: 190px; flex: 1; }
-.stat .v { font-weight: 600; font-size: 1.05rem; }
-.stat .k { font-size: .82rem; color: #55657A; margin-top: 2px; }
+.stTabs [data-baseweb="tab-list"] { gap: 4px; border-bottom: 2px solid #BBD3EE; }
+.stTabs [data-baseweb="tab"] { height: 46px; padding: 0 18px; color: #3B5B8C; font-size: 1.1rem; }
+.stTabs [aria-selected="true"] { color: #0B2447 !important; font-weight: 700; }
+.stTabs [data-baseweb="tab-highlight"] { background-color: #19376D; height: 3px; }
 
-.stTabs [data-baseweb="tab-list"] { gap: 6px; border-bottom: 1px solid #DDE3EA; }
-.stTabs [data-baseweb="tab"] { height: 44px; padding: 0 16px; font-weight: 500; color: #55657A; }
-.stTabs [aria-selected="true"] { color: #0E7C86 !important; }
-.stTabs [data-baseweb="tab-highlight"] { background-color: #0E7C86; }
+.lead { font-size: 1.12rem; color: #2A4670; margin: 6px 0 12px 0; }
+[data-testid="stFileUploader"] section { background: #F5F9FE; border: 2px dashed #6FA0D8; border-radius: 2px; padding: 24px; }
+[data-testid="stFileUploader"] section:hover { border-color: #19376D; }
+.stButton button, .stDownloadButton button { border-radius: 2px; background: #19376D; color: #fff; border: 1px solid #19376D; font-size: 1.05rem; }
+.stButton button:hover, .stDownloadButton button:hover { background: #0B2447; color: #fff; border-color: #0B2447; }
+.stButton button p, .stDownloadButton button p { color: #fff; }
 
-[data-testid="stFileUploader"] section { background: #fff; border: 1.5px dashed #9FB3C2; border-radius: 10px; padding: 22px; }
-[data-testid="stFileUploader"] section:hover { border-color: #0E7C86; }
-.stButton button, .stDownloadButton button { border-radius: 8px; border: 1px solid #0E7C86; color: #0E7C86; background: #fff; font-weight: 500; }
-.stButton button:hover, .stDownloadButton button:hover { background: #0E7C86; color: #fff; border-color: #0E7C86; }
+.viewer { background: #071A33; padding: 14px; position: relative; border-radius: 2px; }
+.viewer img { width: 100%; display: block; }
+.viewer .tag { position: absolute; top: 22px; left: 24px; font-size: .9rem; color: #D6E4F7; background: rgba(7,26,51,.75); padding: 3px 9px; }
+.vmeta { font-size: 1rem; color: #3B5B8C; margin-top: 8px; line-height: 1.5; }
 
-.viewer { background: #0B1420; border-radius: 10px; padding: 14px; position: relative; }
-.viewer img { width: 100%; border-radius: 6px; display: block; }
-.viewer .tag { position: absolute; top: 22px; left: 24px; font-size: .75rem; color: #C9D6E2;
-  background: rgba(11,20,32,.72); padding: 3px 8px; border-radius: 4px; }
-.vmeta { font-size: .82rem; color: #55657A; margin-top: 8px; }
+.report { background: #F5F9FE; border: 1px solid #BBD3EE; border-top: 4px solid #19376D; padding: 22px 26px; border-radius: 2px; }
+.report h3 { font-size: 1.7rem; margin: 0 0 4px 0; color: #0B2447; font-weight: 700; }
+.report .sub { color: #3B5B8C; font-size: 1.05rem; margin-bottom: 14px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 18px 0; }
+.chip { background: #19376D; color: #fff; padding: 4px 14px; font-size: 1.02rem; border-radius: 2px; }
+.chip.none { background: #DCE8F6; color: #3B5B8C; }
 
-.panel { background: #fff; border: 1px solid #DDE3EA; border-radius: 10px; padding: 20px 22px; }
-.panel h3 { font-family: 'Source Serif 4', serif; font-size: 1.25rem; margin: 0 0 4px 0; font-weight: 600; }
-.panel .sub { color: #55657A; font-size: .9rem; margin-bottom: 14px; }
-.chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 16px 0; }
-.chip { background: #E3F2F3; color: #0A5961; border-radius: 999px; padding: 4px 12px; font-size: .85rem; font-weight: 500; }
-.chip.none { background: #EEF1F4; color: #55657A; }
+.row { display: grid; grid-template-columns: 170px 1fr 52px; align-items: center; gap: 14px; padding: 6px 0; border-bottom: 1px solid #E1EBF7; }
+.rname { font-size: 1.08rem; }
+.rname.top { font-weight: 700; }
+.track { background: #D5E3F4; height: 11px; position: relative; }
+.fill { height: 11px; }
+.mark { position: absolute; top: -5px; width: 2px; height: 21px; background: #0B2447; }
+.rval { font-size: 1.08rem; text-align: right; font-variant-numeric: tabular-nums; }
+.legend { display: flex; gap: 18px; flex-wrap: wrap; font-size: .98rem; color: #3B5B8C; margin-top: 16px; }
+.sw { display: inline-block; width: 12px; height: 12px; margin-right: 6px; vertical-align: -1px; }
+.note { font-size: .98rem; color: #3B5B8C; margin-top: 10px; line-height: 1.5; }
 
-.row { display: grid; grid-template-columns: 150px 1fr 48px; align-items: center; gap: 12px; padding: 6px 0; }
-.rname { font-size: .92rem; }
-.rname.top { font-weight: 600; }
-.track { background: #EDF1F5; height: 10px; border-radius: 5px; position: relative; }
-.fill { height: 10px; border-radius: 5px; }
-.mark { position: absolute; top: -4px; width: 2px; height: 18px; background: #0F1B2D; opacity: .55; }
-.rval { font-variant-numeric: tabular-nums; font-size: .9rem; text-align: right; color: #0F1B2D; }
-.legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: .8rem; color: #55657A; margin-top: 14px; }
-.dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; }
+.sens-label { font-size: 1.2rem; font-weight: 700; margin: 2px 0 0 0; }
+.sens-help { font-size: 1.02rem; color: #2A4670; margin: 2px 0 14px 0; line-height: 1.5; }
 
-.empty { background: #fff; border: 1px solid #DDE3EA; border-radius: 10px; padding: 28px; margin-top: 14px; }
-.empty h3 { font-family: 'Source Serif 4', serif; margin: 0 0 6px 0; font-weight: 600; }
-.empty p { color: #55657A; margin: 0; line-height: 1.6; }
+.empty { background: #F5F9FE; border: 1px solid #BBD3EE; border-left: 4px solid #19376D; padding: 22px 26px; margin-top: 14px; }
+.empty h3 { margin: 0 0 6px 0; font-size: 1.4rem; }
+.empty p { margin: 0; font-size: 1.1rem; line-height: 1.6; color: #2A4670; }
 
-.step { display: flex; gap: 14px; padding: 14px 0; border-bottom: 1px solid #E6EBF0; }
+.step { display: flex; gap: 16px; padding: 15px 0; border-bottom: 1px solid #D5E3F4; }
 .step:last-child { border-bottom: none; }
-.step .n { flex: 0 0 30px; height: 30px; border-radius: 50%; background: #E3F2F3; color: #0A5961; font-weight: 600;
-  display: flex; align-items: center; justify-content: center; font-size: .9rem; }
-.step .t { font-weight: 600; }
-.step .d { color: #55657A; font-size: .92rem; margin-top: 2px; line-height: 1.5; }
+.step .n { flex: 0 0 34px; height: 34px; background: #19376D; color: #fff; font-weight: 700; display: flex; align-items: center; justify-content: center; font-size: 1.05rem; }
+.step .t { font-weight: 700; font-size: 1.15rem; }
+.step .d { color: #2A4670; font-size: 1.05rem; margin-top: 2px; line-height: 1.55; }
+.about p { font-size: 1.12rem; line-height: 1.75; color: #1D3A63; }
 
-.notice { background: #FFF6E5; border: 1px solid #F0D9A8; color: #6B4A08; border-radius: 8px;
-  padding: 10px 14px; font-size: .86rem; margin-bottom: 18px; line-height: 1.5; }
-.foot { color: #7A8896; font-size: .8rem; margin-top: 2.2rem; text-align: center; }
+.foot { color: #4B6A98; font-size: .95rem; margin-top: 2.4rem; text-align: center; }
 
 @media (max-width: 720px) {
-  .hero h1 { font-size: 1.9rem; }
-  .row { grid-template-columns: 110px 1fr 40px; }
+  .mast { padding: 28px 22px 0 22px; }
+  .mast h1 { font-size: 2.1rem; }
+  .facts { flex-direction: column; margin: 0 -22px; }
+  .fact { padding: 14px 22px; border-right: none; border-bottom: 1px solid #2F4F82; }
+  .row { grid-template-columns: 120px 1fr 44px; }
 }
 </style>
 """
@@ -126,40 +139,41 @@ def to_b64(file_bytes: bytes) -> str:
     return base64.b64encode(buf.getvalue()).decode()
 
 
-def colour(score: float) -> str:
-    return HIGH if score >= 0.5 else MOD if score >= 0.25 else LOW
+def shade(score: float) -> str:
+    return DEEP if score >= 0.5 else MID if score >= 0.25 else SKY
 
 
 model_mb = os.path.getsize(MODEL_PATH) / 1e6 if os.path.exists(MODEL_PATH) else None
+runtime_line = f"ONNX FP16, {model_mb:.1f} MB" if model_mb else "ONNX FP16"
 
 html(f"""
-<div class="hero">
-<h1>Chest X-ray findings, on a CPU.</h1>
-<p>Upload a frontal chest radiograph and get ranked scores for 14 thoracic findings in milliseconds, with no GPU required.</p>
+<div class="mast">
+<h1>Chest X-ray screening, without the GPU.</h1>
+<p>Upload a frontal chest radiograph and the model reads it in a fraction of a second, scoring 14 thoracic
+findings, from pneumonia and effusion to nodules and cardiomegaly, and ranking them by how strongly the image
+matches each pattern. It is built on a compact EfficientNet-B0 and exported to ONNX FP16, so the whole analysis
+runs on an ordinary CPU and does not depend on specialist hardware.</p>
+<div class="facts">
+<div class="fact"><div class="v">EfficientNet-B0</div><div class="k">Model architecture</div></div>
+<div class="fact"><div class="v">{runtime_line}</div><div class="k">CPU-only runtime</div></div>
+<div class="fact"><div class="v">NIH ChestX-ray14</div><div class="k">Training data, 14 finding labels</div></div>
 </div>
-<div class="stats">
-<div class="stat"><div class="v">EfficientNet-B0</div><div class="k">Model architecture</div></div>
-<div class="stat"><div class="v">ONNX FP16{f' · {model_mb:.1f} MB' if model_mb else ''}</div><div class="k">Runtime format, CPU only</div></div>
-<div class="stat"><div class="v">NIH ChestX-ray14</div><div class="k">Training dataset, 14 labels</div></div>
 </div>
 """)
 
 tab_run, tab_how, tab_about = st.tabs(["Analyze an X-ray", "How it works", "About this project"])
 
 with tab_run:
-    html("""
-    <div class="notice">Research prototype. This is not a medical device and must not be used for diagnosis.
-    Please do not upload real patient images.</div>
-    """)
-    file = st.file_uploader("Upload a frontal chest X-ray (PNG or JPG)", type=["png", "jpg", "jpeg"],
+    html('<div class="lead">Choose a frontal chest X-ray in PNG or JPG format.</div>')
+    file = st.file_uploader("Upload a frontal chest X-ray", type=["png", "jpg", "jpeg"],
                             label_visibility="collapsed")
 
     if file is None:
         html("""
         <div class="empty">
-        <h3>No image yet</h3>
-        <p>Drop a PNG or JPG above. The model scores every finding at once, and you can adjust the flag
-        threshold to see how the ranking changes.</p>
+        <h3>Waiting for an image</h3>
+        <p>Once you upload an X-ray, every finding is scored at once and ranked from most to least likely.
+        You can then choose how sensitive the flagging should be.</p>
         </div>
         """)
     else:
@@ -179,38 +193,44 @@ with tab_run:
             html(f"""
             <div class="viewer"><span class="tag">{file.name}</span>
             <img src="data:image/jpeg;base64,{to_b64(data)}" alt="Uploaded chest X-ray"/></div>
-            <div class="vmeta">{w} × {h} px · resized to 224 × 224 for the model · inference {ms:.1f} ms on CPU</div>
+            <div class="vmeta">Original size {w} × {h} pixels, resized to 224 × 224 for the model.<br>
+            Analysed on CPU in {ms:.1f} ms.</div>
             """)
 
         with right:
-            thr = st.slider("Flag findings scoring at or above", 0.05, 0.95, 0.30, 0.05)
+            html('<div class="sens-label">Sensitivity</div>')
+            level = st.radio("Sensitivity", list(SENSITIVITY), index=1, horizontal=True,
+                             label_visibility="collapsed")
+            thr, help_text = SENSITIVITY[level]
+            html(f'<div class="sens-help">{help_text} Findings scoring {thr:.2f} or higher are flagged.</div>')
+
             flagged = [LABELS[i] for i in order if scores[i] >= thr]
             chips = ("".join(f'<span class="chip">{n}</span>' for n in flagged)
-                     if flagged else '<span class="chip none">No finding at or above this threshold</span>')
+                     if flagged else '<span class="chip none">No finding reaches this level</span>')
 
             rows = ""
             for rank, i in enumerate(order):
                 s = float(scores[i])
                 rows += (f'<div class="row"><div class="rname{" top" if rank < 3 else ""}">{LABELS[i]}</div>'
-                         f'<div class="track"><div class="fill" style="width:{s*100:.1f}%;background:{colour(s)}"></div>'
+                         f'<div class="track"><div class="fill" style="width:{s*100:.1f}%;background:{shade(s)}"></div>'
                          f'<div class="mark" style="left:{thr*100:.0f}%"></div></div>'
                          f'<div class="rval">{s:.2f}</div></div>')
 
             html(f"""
-            <div class="panel">
-            <h3>Model findings</h3>
-            <div class="sub">{len(flagged)} of 14 findings at or above {thr:.2f}</div>
+            <div class="report">
+            <h3>Findings report</h3>
+            <div class="sub">{len(flagged)} of 14 findings flagged at {level.lower()} sensitivity</div>
             <div class="chips">{chips}</div>
             {rows}
             <div class="legend">
-            <span><span class="dot" style="background:{HIGH}"></span>0.50 and above</span>
-            <span><span class="dot" style="background:{MOD}"></span>0.25 to 0.49</span>
-            <span><span class="dot" style="background:{LOW}"></span>below 0.25</span>
-            <span>The dark tick marks your threshold</span>
+            <span><span class="sw" style="background:{DEEP}"></span>0.50 or higher</span>
+            <span><span class="sw" style="background:{MID}"></span>0.25 to 0.49</span>
+            <span><span class="sw" style="background:{SKY}"></span>below 0.25</span>
+            <span><span class="sw" style="background:{NAVY};width:3px"></span>flagging line</span>
             </div>
+            <div class="note">Scores are relative model outputs, not calibrated probabilities.</div>
             </div>
             """)
-            st.caption("Scores are relative model outputs, not calibrated probabilities.")
 
             df = pd.DataFrame({"Finding": [LABELS[i] for i in order],
                                "Score": [round(float(scores[i]), 4) for i in order]})
@@ -219,33 +239,34 @@ with tab_run:
 
 with tab_how:
     html("""
-    <div class="panel">
+    <div class="report">
     <h3>From upload to ranked scores</h3>
-    <div class="sub">The whole pipeline runs on the server's CPU, with no GPU and no external API.</div>
+    <div class="sub">The entire pipeline runs on the server's CPU, with no GPU and no external API.</div>
     <div class="step"><div class="n">1</div><div><div class="t">Read and prepare the image</div>
     <div class="d">The upload is converted to RGB and resized to 224 × 224 pixels.</div></div></div>
     <div class="step"><div class="n">2</div><div><div class="t">Normalize</div>
-    <div class="d">Pixel values are scaled to 0–1, then standardized with ImageNet mean and standard deviation.</div></div></div>
+    <div class="d">Pixel values are scaled to the 0 to 1 range, then standardized with the ImageNet mean and standard deviation.</div></div></div>
     <div class="step"><div class="n">3</div><div><div class="t">Run the ONNX model</div>
-    <div class="d">An FP16 EfficientNet-B0 runs through ONNX Runtime's CPU provider. The session is loaded once and reused.</div></div></div>
+    <div class="d">An FP16 EfficientNet-B0 runs through ONNX Runtime's CPU provider. The session loads once and is reused.</div></div></div>
     <div class="step"><div class="n">4</div><div><div class="t">Convert logits to scores</div>
-    <div class="d">A sigmoid is applied to each of the 14 outputs, because a single X-ray can show several findings at once.</div></div></div>
+    <div class="d">A sigmoid is applied to each of the 14 outputs, because one X-ray can show several findings at once.</div></div></div>
     <div class="step"><div class="n">5</div><div><div class="t">Rank and display</div>
-    <div class="d">Findings are sorted by score and shown against the threshold you choose.</div></div></div>
+    <div class="d">Findings are sorted by score and compared with the sensitivity level you choose.</div></div></div>
     </div>
     """)
 
 with tab_about:
     html("""
-    <div class="panel">
+    <div class="report about">
     <h3>About this project</h3>
     <div class="sub">A study in making chest X-ray classification practical on ordinary hardware.</div>
-    <p style="line-height:1.7">The model was trained on the NIH ChestX-ray14 dataset to score 14 thoracic findings:
-    atelectasis, cardiomegaly, effusion, infiltration, mass, nodule, pneumonia, pneumothorax, consolidation, edema,
-    emphysema, fibrosis, pleural thickening and hernia. It was exported to ONNX in FP16 to keep file size, memory use
-    and latency low enough for CPU-only deployment.</p>
-    <p style="line-height:1.7">This is a multi-label task, so the scores are independent and do not sum to one.
-    They rank how strongly the model responds to each finding and are not calibrated probabilities.</p>
+    <p>The model was trained on the NIH ChestX-ray14 dataset to score 14 thoracic findings: atelectasis,
+    cardiomegaly, effusion, infiltration, mass, nodule, pneumonia, pneumothorax, consolidation, edema,
+    emphysema, fibrosis, pleural thickening and hernia. It was exported to ONNX in FP16 to keep file size,
+    memory use and latency low enough for CPU-only deployment.</p>
+    <p>This is a multi-label task, so the scores are independent and do not add up to one. They rank how
+    strongly the model responds to each finding and are not calibrated probabilities.</p>
     </div>
-    <div class="foot">Research prototype · not a medical device · not for diagnosis</div>
     """)
+
+html('<div class="foot">For research and education only. Not a medical device and not for diagnosis.</div>')
